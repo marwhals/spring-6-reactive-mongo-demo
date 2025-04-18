@@ -11,6 +11,10 @@ import org.springframework.data.mongodb.config.AbstractReactiveMongoConfiguratio
 
 import java.util.Collections;
 
+/**
+ * This can be moved to application properties, the files itself can be deleted
+ */
+
 @Configuration
 public class MongoConfig extends AbstractReactiveMongoConfiguration {
 
