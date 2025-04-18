@@ -1,15 +1,23 @@
 package spring.example.reactive_mongo_demo.service;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import reactor.core.publisher.Mono;
 import spring.example.reactive_mongo_demo.domain.Beer;
 import spring.example.reactive_mongo_demo.mappers.BeerMapper;
+import spring.example.reactive_mongo_demo.mappers.BeerMapperImpl;
 import spring.example.reactive_mongo_demo.model.BeerDTO;
+import spring.example.reactive_mongo_demo.repositories.BeerRepository;
 
 import java.math.BigDecimal;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.awaitility.Awaitility.await;
 
 @SpringBootTest
 class BeerServiceImplTest {
@@ -20,6 +28,9 @@ class BeerServiceImplTest {
     @Autowired
     BeerMapper beerMapper;
 
+    @Autowired
+    BeerRepository beerRepository;
+
     BeerDTO beerDTO;
 
     @BeforeEach
@@ -27,17 +38,108 @@ class BeerServiceImplTest {
         beerDTO = beerMapper.beerToBeerDto(getTestBeer());
     }
 
-
     @Test
     void saveBeer() throws InterruptedException {
+
+        AtomicBoolean atomicBoolean = new AtomicBoolean(false);
 
         Mono<BeerDTO> savedMono = beerService.saveBeer(Mono.just(beerDTO));
 
         savedMono.subscribe(savedDto -> {
             System.out.println(savedDto.getId());
+            atomicBoolean.set(true);
         });
 
-        Thread.sleep(1000l);
+        await().untilTrue(atomicBoolean);
+    }
+
+    @Test
+    @DisplayName("Test Save Beer Using Subscriber")
+    void saveBeerUseSubscriber() {
+
+        AtomicBoolean atomicBoolean = new AtomicBoolean(false);
+        AtomicReference<BeerDTO> atomicDto = new AtomicReference<>();
+
+        Mono<BeerDTO> savedMono = beerService.saveBeer(Mono.just(beerDTO));
+
+        savedMono.subscribe(savedDto -> {
+            System.out.println(savedDto.getId());
+            atomicBoolean.set(true);
+            atomicDto.set(savedDto);
+        });
+
+        await().untilTrue(atomicBoolean);
+
+        BeerDTO persistedDto = atomicDto.get();
+        assertThat(persistedDto).isNotNull();
+        assertThat(persistedDto.getId()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Test Save Beer Using Block")
+    void testSaveBeerUseBlock() {
+        BeerDTO savedDto = beerService.saveBeer(Mono.just(getTestBeerDto())).block();
+        assertThat(savedDto).isNotNull();
+        assertThat(savedDto.getId()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Test Update Beer Using Block")
+    void testUpdateBlocking() {
+        final String newName = "New Beer Name";  // use final so cannot mutate
+        BeerDTO savedBeerDto = getSavedBeerDto();
+        savedBeerDto.setBeerName(newName);
+
+        BeerDTO updatedDto = beerService.saveBeer(Mono.just(savedBeerDto)).block();
+
+        //verify exists in db
+        BeerDTO fetchedDto = beerService.getById(updatedDto.getId()).block();
+        assertThat(fetchedDto.getBeerName()).isEqualTo(newName);
+    }
+
+    @Test
+    @DisplayName("Test Update Using Reactive Streams")
+    void testUpdateStreaming() {
+        final String newName = "New Beer Name";  // use final so cannot mutate
+
+        AtomicReference<BeerDTO> atomicDto = new AtomicReference<>();
+
+        beerService.saveBeer(Mono.just(getTestBeerDto()))
+                .map(savedBeerDto -> {
+                    savedBeerDto.setBeerName(newName);
+                    return savedBeerDto;
+                })
+                .flatMap(beerService::saveBeer) // save updated beer
+                .flatMap(savedUpdatedDto -> beerService.getById(savedUpdatedDto.getId())) // get from db
+                .subscribe(dtoFromDb -> {
+                    atomicDto.set(dtoFromDb);
+                });
+
+        await().until(() -> atomicDto.get() != null);
+        assertThat(atomicDto.get().getBeerName()).isEqualTo(newName);
+    }
+
+
+    @Test
+    void testDeleteBeer() {
+        BeerDTO beerToDelete = getSavedBeerDto();
+
+        beerService.deleteBeerById(beerToDelete.getId()).block();
+
+        Mono<BeerDTO> expectedEmptyBeerMono = beerService.getById(beerToDelete.getId());
+
+        BeerDTO emptyBeer = expectedEmptyBeerMono.block();
+
+        assertThat(emptyBeer).isNull();
+
+    }
+
+    public BeerDTO getSavedBeerDto(){
+        return beerService.saveBeer(Mono.just(getTestBeerDto())).block();
+    }
+
+    public static BeerDTO getTestBeerDto(){
+        return new BeerMapperImpl().beerToBeerDto(getTestBeer());
     }
 
     public static Beer getTestBeer() {
@@ -46,7 +148,7 @@ class BeerServiceImplTest {
                 .beerStyle("IPA")
                 .price(BigDecimal.TEN)
                 .quantityOnHand(12)
-                .upc("123345")
+                .upc("123213")
                 .build();
     }
 

@@ -32,7 +32,7 @@ public class MongoConfig extends AbstractReactiveMongoConfiguration {
                         "example".toCharArray()))
                 .applyToClusterSettings(
                         settings -> {
-                            settings.hosts((Collections.singletonList(new ServerAddress("192.169.1.105", 27017))));
+                            settings.hosts((Collections.singletonList(new ServerAddress("192.168.1.105", 27017))));
                         });
     }
 }
