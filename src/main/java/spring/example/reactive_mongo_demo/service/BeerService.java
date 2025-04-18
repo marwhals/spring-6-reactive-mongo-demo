@@ -5,6 +5,8 @@ import reactor.core.publisher.Mono;
 import spring.example.reactive_mongo_demo.model.BeerDTO;
 
 public interface BeerService {
+    Mono<BeerDTO> findFirstByBeerName(String beerName);
+
     Flux<BeerDTO> listBeers();
     Mono<BeerDTO> saveBeer(Mono<BeerDTO> beerDto);
 
