@@ -28,7 +28,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @Testcontainers //For use on machine with correct BIOS setup
 @SpringBootTest
-class BeerServiceImplTest {
+public class BeerServiceImplTest {
 
     @Container
     @ServiceConnection //Override what is in application.properties
